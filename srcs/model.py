@@ -23,7 +23,7 @@ class Residual(nn.Module):
         out     = self.bn2(out)
         if self.conv3:
             x   = self.conv3(x)
-        out += x
+        out     += x
         return F.relu(out)
 
 class ResNet(nn.Module):
@@ -54,13 +54,13 @@ class ResNet(nn.Module):
         return nn.Sequential(*blk)
 
     def forward(self, x):
-        out = self.conv2d(x)    
-        out = self.bn(out)
-        out = F.relu(out)
-        out = self.pool(out)
+        out     = self.conv2d(x)    
+        out     = self.bn(out)
+        out     = F.relu(out)
+        out     = self.pool(out)
 
         for i in range(len(self.arch)):
             out = getattr(self, f'b{i+2}')(out)
-        out = self.gap(out)
-        out = self.flatten(out)
+        out     = self.gap(out)
+        out     = self.flatten(out)
         return self.linear(out)
