@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import pandas as pd
 from PIL import Image
+from torchvision.tv_tensors import BoundingBoxes, Image as TVImage
 
 class Dataset:
     """
@@ -24,6 +25,11 @@ class Dataset:
         row     = self.df.iloc[idx]
         label   = torch.tensor([row['age']], dtype=torch.float32)
         image   = Image.open(row['img']).convert('RGB')
+
+        pts = row['pts']
+        if pts:
+            xmin, ymin, xmax, ymax = self._get_bbox_from_pts_(pts)
+            image = image.crop((xmin, ymin, xmax, ymax)) # Crop the image to leave only face features based on the pts file.
 
         if self.transform:
             image = self.transform(image)
@@ -61,6 +67,16 @@ class Dataset:
                     points.append({'x': x, 'y': y})
         return points
 
+    def _get_bbox_from_pts_(self, pts, margin=20):
+        xs = [p['x'] for p in pts]
+        ys = [p['y'] for p in pts]
+
+        xmin = int(min(xs)) - margin
+        ymin = int(min(ys)) - margin
+        xmax = int(max(xs)) + margin
+        ymax = int(max(ys)) + margin
+
+        return xmin, ymin, xmax, ymax
     def _load_(self):
         records = []
 
