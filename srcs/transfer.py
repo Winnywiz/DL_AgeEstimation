@@ -16,7 +16,7 @@ from utils import train_one_epoch, test, plot_predictions
 
 learning_rate = 5e-4
 batch_size = 64
-epochs = 5
+epochs = 10
 
 train_trans = transforms_v2.Compose([
     transforms_v2.Resize((256, 256)), 
@@ -38,7 +38,7 @@ test_trans = transforms_v2.Compose([
 
 if __name__ == '__main__':
 
-    data_dir = r"../UTKFace_organized"
+    data_dir = r"./UTKFace_organized"
 
     base_train_dataset = datasets.ImageFolder(root=data_dir, transform=train_trans)
     base_test_dataset = datasets.ImageFolder(root=data_dir, transform=test_trans)
@@ -101,7 +101,8 @@ if __name__ == '__main__':
     writer = SummaryWriter(f'./runs/trainer_{model._get_name()}_{datetime.now().strftime("%Y%m%d-%H%M%S")}')
 
     # Specify loss function
-    loss_fn = nn.CrossEntropyLoss()
+    class_weights = torch.tensor([3.58, 1.0, 2.11, 3.56]).to(device)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     # Specify optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
@@ -204,9 +205,10 @@ if __name__ == '__main__':
         lr=fine_tune_lr
     )
 
-    epochs_ft = epochs
+    epochs_ft = 10
     best_vloss_ft = 100000.
     if not os.path.exists('model_best_finetuned.pth'):
+    # if True:
         for epoch in range(epochs_ft):
             print(f"Fine-Tune Epoch {epoch+1} / {epochs_ft}")
             
