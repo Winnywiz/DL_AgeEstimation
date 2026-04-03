@@ -40,11 +40,9 @@ def predict_age(image_path, model_path, device):
     print(f"Confidence: {confidence.item() * 100:.2f}%")
     print("-" * 30)
 
-
-
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-my_image = r"../UTKFace_organized\18-24\18_0_0_20170105183259439.jpg.chip.jpg" 
+my_image = r"C:\Users\User\Documents\GitHub\DL_AgeEstimation\UTKFace_organized\18-24\18_0_0_20170110231228322.jpg.chip.jpg" 
 
 
 my_model = "model_best_finetuned.pth" 

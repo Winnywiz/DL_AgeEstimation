@@ -11,7 +11,7 @@ print("Path to dataset files:", path)
 # Organise the UTKFace dataset into age bins
 
 raw_data_path = os.path.join(path, "utkface_aligned_cropped", "UTKFace") 
-output_base = r"../UTKFace_organized"
+output_base = r"./UTKFace_organized"
 
 age_bins = {
     "18-24": (18, 24),
@@ -49,3 +49,20 @@ else:
                 continue
 
     print(f"Successfully organized {count} images into {output_base}")
+
+data_dir = "./UTKFace_organized"
+distribution = {}
+
+# Iterate through each folder and count the files
+for folder in os.listdir(data_dir):
+    folder_path = os.path.join(data_dir, folder)
+    if os.path.isdir(folder_path):
+        count = len([f for f in os.listdir(folder_path) if f.endswith(('.jpg', '.jpeg', '.png'))])
+        distribution[folder] = count
+
+print("-" * 30)
+print("AGE RANGE DISTRIBUTION")
+print("-" * 30)
+for folder, count in sorted(distribution.items()):
+    print(f"{folder:10} : {count} images")
+print("-" * 30)
