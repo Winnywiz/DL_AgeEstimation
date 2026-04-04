@@ -69,6 +69,9 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device} device\n")
+    print("If cuda not found, try installing torch and torchvision with the following command:")
+    print("pip uninstall torch torchvision")
+    print("pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130")
         
     # Import weight from resnet50 pretrained on ImageNet
     from torchvision.models import resnet50, ResNet50_Weights
@@ -229,7 +232,7 @@ if __name__ == '__main__':
     print("\nPhase 2 Done!")
 
     # Final Evaluation of the Fine-Tuned Model
-    model_best.load_state_dict(torch.load('model_best_finetuned.pth', weights_only=True))
+    model_best.load_state_dict(torch.load('model_best_finetuned.pth', map_location=device, weights_only=True))
     model_best.eval()
     final_loss, final_y_preds, final_y_trues = test(test_dl, model_best, loss_fn, device)
     final_acc = multiclass_accuracy(final_y_preds, final_y_trues).item()
