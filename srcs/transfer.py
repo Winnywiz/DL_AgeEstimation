@@ -16,7 +16,7 @@ from utils import train_one_epoch, test, plot_predictions
 
 learning_rate = 5e-4
 batch_size = 64
-epochs = 10
+epochs = 15
 
 train_trans = transforms_v2.Compose([
     transforms_v2.Resize((256, 256)), 
@@ -211,7 +211,7 @@ if __name__ == '__main__':
         lr=fine_tune_lr
     )
 
-    epochs_ft = 10
+    epochs_ft = 20
     best_vloss_ft = 100000.
     if not os.path.exists('model_best_finetuned.pth'):
     # if True:
