@@ -67,7 +67,7 @@ if __name__ == '__main__':
 
 
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using {device} device\n")
         
     # Import weight from resnet50 pretrained on ImageNet
@@ -163,7 +163,10 @@ if __name__ == '__main__':
 
 
     model_best = model_best.to(device)
-    model_best.load_state_dict(torch.load('model_best_vloss.pth', weights_only=True))
+
+    checkpoint = torch.load('model_best_vloss.pth', map_location=device, weights_only=True)
+
+    model_best.load_state_dict(checkpoint)
 
     model_best.eval()
 
