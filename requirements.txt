@@ -6,3 +6,4 @@ opencv-python
 torcheval
 tensorboard
 kagglehub
+mediapipe==0.10.14
