@@ -85,7 +85,7 @@ if __name__ == "__main__":
     model_weight_path = "model_best_finetuned.pth"
 
     pad = 0.1
-    my_img = r'E113BY8I.jpeg'
+    my_img = r'00598_AKARA.jpg'
     
     age_model = models.resnet50()
     num_ftrs = age_model.fc.in_features
