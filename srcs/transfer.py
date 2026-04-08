@@ -19,17 +19,17 @@ batch_size = 64
 epochs = 15
 
 train_trans = transforms_v2.Compose([
-    transforms_v2.Resize((256, 256)), 
-    transforms_v2.RandomCrop(224),
+    transforms_v2.Resize((224, 224)),
     transforms_v2.RandomHorizontalFlip(p=0.5),
-    transforms_v2.RandomRotation(degrees=9),
-    transforms_v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-    transforms_v2.ToImage(), 
+    transforms_v2.RandomRotation(degrees=5), # Very slight rotation
+    transforms_v2.ColorJitter(brightness=0.1, contrast=0.1),
+    transforms_v2.ToImage(),
     transforms_v2.ToDtype(torch.float32, scale=True),
-    transforms_v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # Standard ImageNet normalization
+    transforms_v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
+
 test_trans = transforms_v2.Compose([
-    transforms_v2.Resize((256, 256)), 
+    transforms_v2.Resize((224, 224)),
     transforms_v2.CenterCrop(224),
     transforms_v2.ToImage(), 
     transforms_v2.ToDtype(torch.float32, scale=True),
@@ -84,7 +84,9 @@ if __name__ == '__main__':
         param.requires_grad = False
 
     num_ftrs = model.fc.in_features
-    model.fc = nn.Linear(num_ftrs, 4)
+    model.fc = nn.Sequential(
+    nn.Dropout(0.5),
+    nn.Linear(num_ftrs, 4))
     model = model.to(device)
 
     print(f"Model successfully loaded and sent to: {device}")
@@ -104,8 +106,8 @@ if __name__ == '__main__':
     writer = SummaryWriter(f'./runs/trainer_{model._get_name()}_{datetime.now().strftime("%Y%m%d-%H%M%S")}')
 
     # Specify loss function
-    class_weights = torch.tensor([3.58, 1.0, 2.11, 3.56]).to(device)
-    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+    class_weights = torch.tensor([1.89, 1.0, 1.45, 1.88]).to(device)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
 
     # Specify optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
@@ -162,7 +164,10 @@ if __name__ == '__main__':
 
 
     num_ftrs = model_best.fc.in_features
-    model_best.fc = nn.Linear(num_ftrs, len(test_ds.dataset.classes))
+    model_best.fc = nn.Sequential(
+        nn.Dropout(0.5),
+        nn.Linear(num_ftrs, len(test_ds.dataset.classes))
+    )
 
 
     model_best = model_best.to(device)
@@ -201,40 +206,80 @@ if __name__ == '__main__':
 
     print("\n--- Starting Phase 2: Fine-Tuning Layer 4 ---")
     model_best.train()
-    # Unfreeze ONLY layer 4 of your loaded best model
-    for param in model_best.layer4.parameters():
+    patience = 15
+    counter = 0
+    # Unfreeze all layers of your loaded best model
+    for param in model_best.parameters():
         param.requires_grad = True
 
-    fine_tune_lr = 0.0001
-    optimizer_ft = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model_best.parameters()), 
-        lr=fine_tune_lr
-    )
+    optimizer_ft = torch.optim.AdamW([
+        {'params': model_best.conv1.parameters(), 'lr': 1e-7},
+        {'params': model_best.layer1.parameters(), 'lr': 1e-7},
+        {'params': model_best.layer2.parameters(), 'lr': 1e-6},
+        {'params': model_best.layer3.parameters(), 'lr': 1e-6},
+        {'params': model_best.layer4.parameters(), 'lr': 1e-5},
+        {'params': model_best.fc.parameters(), 'lr': 1e-4}
+    ], weight_decay=0.05)
 
-    epochs_ft = 20
+    epochs_ft = 60
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_ft, T_max=epochs_ft)
     best_vloss_ft = 100000.
-    if not os.path.exists('model_best_finetuned.pth'):
-    # if True:
+    # if not os.path.exists('model_best_finetuned.pth'):
+    if True:
         for epoch in range(epochs_ft):
-            print(f"Fine-Tune Epoch {epoch+1} / {epochs_ft}")
+            print(f"Fine-Tune Epoch {epoch+1} / {epochs_ft} (LR: {optimizer_ft.param_groups[-1]['lr']:.6f})")
             
-            
+
             train_one_epoch(train_dl, model_best, loss_fn, optimizer_ft, epoch, device, writer, log_step_interval=1)
-            
+            scheduler.step()
+
             train_loss, train_y_preds, train_y_trues = test(train_dl, model_best, loss_fn, device)
-            val_loss, val_y_preds, val_y_trues = test(test_dl, model_best, loss_fn, device) # Using test_dl for validation
+            val_loss, val_y_preds, val_y_trues = test(val_dl, model_best, loss_fn, device)
             
             if val_loss < best_vloss_ft:
                 best_vloss_ft = val_loss
                 torch.save(model_best.state_dict(), 'model_best_finetuned.pth')
+                counter = 0
                 print('Saved best FINE-TUNED model to model_best_finetuned.pth')
+            else:
+                counter += 1
+                print(f"No improvement in validation loss for {counter} epochs.")
+                if counter >= patience:
+                    print(f"Early stopping triggered at epoch {epoch+1}.")
+                    break
 
     print("\nPhase 2 Done!")
 
     # Final Evaluation of the Fine-Tuned Model
     model_best.load_state_dict(torch.load('model_best_finetuned.pth', map_location=device, weights_only=True))
     model_best.eval()
-    final_loss, final_y_preds, final_y_trues = test(test_dl, model_best, loss_fn, device)
-    final_acc = multiclass_accuracy(final_y_preds, final_y_trues).item()
 
-    print(f"Final Fine-Tuned Test Accuracy: {(100*final_acc):>0.1f}%")
+    train_loss, train_y_preds, train_y_trues = test(train_dl, model_best, loss_fn, device)
+
+    # Performance metrics on the training set
+    train_perf = {
+        'accuracy': multiclass_accuracy(train_y_preds, train_y_trues).item(),
+        'f1': multiclass_f1_score(train_y_preds, train_y_trues).item(),
+    }
+
+    # Use the best model on the test set
+    test_loss, test_y_preds, test_y_trues = test(test_dl, model_best, loss_fn, device)
+
+    # Performance metrics
+    test_perf = {
+        'accuracy': multiclass_accuracy(test_y_preds, test_y_trues).item(),
+        'f1': multiclass_f1_score(test_y_preds, test_y_trues).item(),
+    }
+    # Use the best model on the validation set
+    val_loss, val_y_preds, val_y_trues = test(val_dl, model_best, loss_fn, device)
+
+    # Performance metrics
+    val_perf = {
+        'accuracy': multiclass_accuracy(val_y_preds, val_y_trues).item(),
+        'f1': multiclass_f1_score(val_y_preds, val_y_trues).item(),
+    }
+
+    print(f"Train: loss={train_loss:>8f}, acc={(100*train_perf['accuracy']):>0.1f}%, f1={(100*train_perf['f1']):>0.1f}%")
+    print(f"Test: loss={test_loss:>8f}, acc={(100*test_perf['accuracy']):>0.1f}%, f1={(100*test_perf['f1']):>0.1f}%")
+    print(f"Validation: loss={val_loss:>8f}, acc={(100*val_perf['accuracy']):>0.1f}%, f1={(100*val_perf['f1']):>0.1f}%")
+    
