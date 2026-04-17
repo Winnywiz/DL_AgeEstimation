@@ -1,5 +1,7 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.models import resnet50, ResNet50_Weights
 
 class Residual(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, use_1x1conv=False, strides=1):
@@ -64,3 +66,20 @@ class ResNet(nn.Module):
         out     = self.gap(out)
         out     = self.flatten(out)
         return self.linear(out)
+    
+def ResNet50(num_classes=4, freeze_backbone=True):
+
+    weights = ResNet50_Weights.DEFAULT
+    model = resnet50(weights=weights)
+
+    if freeze_backbone:
+        for param in model.parameters():
+            param.requires_grad = False
+
+    num_ftrs = model.fc.in_features
+    model.fc = nn.Sequential(
+        nn.Dropout(0.5),
+        nn.Linear(num_ftrs, num_classes)
+    )
+
+    return model, weights
