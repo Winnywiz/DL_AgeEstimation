@@ -13,6 +13,7 @@ from torcheval.metrics.functional import (
     multiclass_f1_score
 )
 from utils import train_one_epoch, test, plot_predictions
+from model import ResNet50
 
 learning_rate = 5e-4
 batch_size = 64
@@ -74,19 +75,9 @@ if __name__ == '__main__':
     print("pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130")
         
     # Import weight from resnet50 pretrained on ImageNet
-    from torchvision.models import resnet50, ResNet50_Weights
 
     # Create a model
-    weights = ResNet50_Weights.DEFAULT
-    model = resnet50(weights=weights)
-    #freeze all layers in the model
-    for param in model.parameters():
-        param.requires_grad = False
-
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Sequential(
-    nn.Dropout(0.5),
-    nn.Linear(num_ftrs, 4))
+    model, weights = ResNet50(num_classes=4, freeze_backbone=True)
     model = model.to(device)
 
     print(f"Model successfully loaded and sent to: {device}")
@@ -160,20 +151,9 @@ if __name__ == '__main__':
     ###########################
  
 
-    model_best = resnet50(weights=weights)
-
-
-    num_ftrs = model_best.fc.in_features
-    model_best.fc = nn.Sequential(
-        nn.Dropout(0.5),
-        nn.Linear(num_ftrs, len(test_ds.dataset.classes))
-    )
-
-
+    model_best, _ = ResNet50(num_classes=len(test_ds.dataset.classes), freeze_backbone=False)
     model_best = model_best.to(device)
-
     checkpoint = torch.load('model_best_vloss.pth', map_location=device, weights_only=True)
-
     model_best.load_state_dict(checkpoint)
 
     model_best.eval()
