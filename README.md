@@ -5,7 +5,7 @@ Streamlit web app for age group prediction using ResNet-50 + MediaPipe face dete
 ## Requirements
 
 - Docker + Docker Compose installed
-- Trained model weights at `checkpoints/resnet50_best_p2.pth`
+- Trained model weights at `checkpoints/`
 
 ## Quick Start
 
