@@ -6,9 +6,10 @@ from torchvision import datasets
 import torchvision.transforms.v2 as T
 from torch.utils.data import DataLoader, Subset, random_split
 from torch.utils.tensorboard import SummaryWriter
+from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_score
 
 from model import EfficientNetB0
-from utils import train_one_epoch, evaluate, plot_predictions
+from utils import train_one_epoch, test, plot_predictions
 
 # ─────────────────────────────────────────────────
 # Config
@@ -20,10 +21,21 @@ LOG_DIR       = "./runs/efficientnet_b0_transfer"
 BATCH_SIZE    = 64
 LEARNING_RATE = 5e-4
 EPOCHS_P1     = 15
-EPOCHS_P2     = 60
+EPOCHS_P2     = 30
 PATIENCE      = 15
 NUM_CLASSES   = 4
 SEED          = 42
+
+
+def evaluate_1_off_accuracy(preds, trues):
+    """Accuracy allowing ±1 class error (adjacent age groups count as correct)."""
+    if not isinstance(preds, torch.Tensor):
+        preds = torch.tensor(preds)
+    if not isinstance(trues, torch.Tensor):
+        trues = torch.tensor(trues)
+    diff = torch.abs(preds - trues)
+    return torch.sum(diff <= 1).item() / len(trues)
+
 
 if __name__ == "__main__":
     os.makedirs("./checkpoints", exist_ok=True)
@@ -47,7 +59,6 @@ if __name__ == "__main__":
 
     test_trans = T.Compose([
         T.Resize((224, 224)),
-        T.CenterCrop(224),
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
         T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -113,10 +124,17 @@ if __name__ == "__main__":
             print(f"Epoch {epoch+1} / {EPOCHS_P1}")
             train_one_epoch(train_dl, model, loss_fn, optimizer, epoch, device, writer)
 
-            val_loss, val_acc, val_f1 = evaluate(val_dl, model, loss_fn, device)
-            writer.add_scalar("Loss/val", val_loss, epoch)
-            writer.add_scalar("Acc/val",  val_acc,  epoch)
-            print(f"  Val → loss={val_loss:.4f}  acc={100*val_acc:.1f}%  f1={100*val_f1:.1f}%")
+            val_loss, val_preds, val_trues = test(val_dl, model, loss_fn, device)
+            val_acc  = multiclass_accuracy(val_preds, val_trues).item()
+            val_f1   = multiclass_f1_score(val_preds, val_trues).item()
+            val_1off = evaluate_1_off_accuracy(val_preds, val_trues)
+
+            writer.add_scalar("Loss/val",    val_loss, epoch)
+            writer.add_scalar("Acc/val",     val_acc,  epoch)
+            writer.add_scalar("1OffAcc/val", val_1off, epoch)
+            writer.add_scalar("F1/val",      val_f1,   epoch)
+
+            print(f"  Val → loss={val_loss:.4f}  acc={100*val_acc:.1f}%  f1={100*val_f1:.1f}%  1-off={100*val_1off:.1f}%")
 
             if val_loss < best_vloss:
                 best_vloss = val_loss
@@ -134,16 +152,19 @@ if __name__ == "__main__":
     model_best.load_state_dict(torch.load(CKPT_P1, map_location=device, weights_only=True))
     model_best.eval()
 
-    train_loss, train_acc, train_f1 = evaluate(train_dl, model_best, loss_fn, device)
-    val_loss,   val_acc,   val_f1   = evaluate(val_dl,   model_best, loss_fn, device)
-    test_loss,  test_acc,  test_f1  = evaluate(test_dl,  model_best, loss_fn, device)
+    def full_eval(dl, tag):
+        loss, preds, trues = test(dl, model_best, loss_fn, device)
+        acc  = multiclass_accuracy(preds, trues).item()
+        f1   = multiclass_f1_score(preds, trues).item()
+        off1 = evaluate_1_off_accuracy(preds, trues)
+        print(f"  {tag} → loss={loss:.4f}  acc={100*acc:.1f}%  f1={100*f1:.1f}%  1-off={100*off1:.1f}%")
 
     print("\n" + "=" * 50)
     print("Phase 1 Evaluation")
     print("=" * 50)
-    print(f"  Train → loss={train_loss:.4f}  acc={100*train_acc:.1f}%  f1={100*train_f1:.1f}%")
-    print(f"  Val   → loss={val_loss:.4f}  acc={100*val_acc:.1f}%  f1={100*val_f1:.1f}%")
-    print(f"  Test  → loss={test_loss:.4f}  acc={100*test_acc:.1f}%  f1={100*test_f1:.1f}%")
+    full_eval(train_dl, "Train")
+    full_eval(val_dl,   "Val  ")
+    full_eval(test_dl,  "Test ")
     print("=" * 50)
 
     # ─────────────────────────────────────────────────
@@ -156,9 +177,9 @@ if __name__ == "__main__":
         param.requires_grad = True
 
     optimizer_ft = torch.optim.AdamW([
-        {"params": model_best.features.parameters(),    "lr": 1e-6},
-        {"params": model_best.classifier.parameters(),  "lr": 1e-4},
-    ], weight_decay=0.05)
+        {"params": model_best.features.parameters(),   "lr": 1e-6},
+        {"params": model_best.classifier.parameters(), "lr": 1e-4},
+    ], weight_decay=1e-2)
 
     scheduler     = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_ft, T_max=EPOCHS_P2)
     best_vloss_ft = float("inf")
@@ -167,17 +188,31 @@ if __name__ == "__main__":
     for epoch in range(EPOCHS_P2):
         lr_head = optimizer_ft.param_groups[-1]["lr"]
         print(f"Fine-Tune Epoch {epoch+1} / {EPOCHS_P2}  (lr_head={lr_head:.2e})")
+
         train_one_epoch(train_dl, model_best, loss_fn, optimizer_ft, epoch, device, writer)
         scheduler.step()
 
-        val_loss, val_acc, val_f1 = evaluate(val_dl, model_best, loss_fn, device)
-        writer.add_scalar("Loss/val_ft", val_loss, epoch)
-        writer.add_scalar("Acc/val_ft",  val_acc,  epoch)
-        print(f"  Val → loss={val_loss:.4f}  acc={100*val_acc:.1f}%  f1={100*val_f1:.1f}%")
+        val_loss, val_preds, val_trues = test(val_dl, model_best, loss_fn, device)
+        val_acc  = multiclass_accuracy(val_preds, val_trues).item()
+        val_f1   = multiclass_f1_score(val_preds, val_trues).item()
+        val_1off = evaluate_1_off_accuracy(val_preds, val_trues)
+
+        writer.add_scalar("Loss/val_ft",     val_loss, epoch)
+        writer.add_scalar("Acc/val_ft",      val_acc,  epoch)
+        writer.add_scalar("1OffAcc/val_ft",  val_1off, epoch)
+        writer.add_scalar("F1/val_ft",       val_f1,   epoch)
+
+        print(f"  Val → loss={val_loss:.4f}  acc={100*val_acc:.1f}%  f1={100*val_f1:.1f}%  1-off={100*val_1off:.1f}%")
 
         if val_loss < best_vloss_ft:
             best_vloss_ft = val_loss
-            torch.save(model_best.state_dict(), CKPT_P2)
+            torch.save({
+                "epoch"              : epoch + 1,
+                "model_state_dict"   : model_best.state_dict(),
+                "optimizer_state_dict": optimizer_ft.state_dict(),
+                "loss"               : best_vloss_ft,
+                "f1_score"           : val_f1,
+            }, CKPT_P2)
             counter = 0
             print(f"  ✓ Saved → {CKPT_P2}")
         else:
@@ -190,17 +225,17 @@ if __name__ == "__main__":
     writer.close()
     print("\nPhase 2 Done!")
 
-    model_best.load_state_dict(torch.load(CKPT_P2, map_location=device, weights_only=True))
+    # ─────────────────────────────────────────────────
+    # Final Evaluation
+    # ─────────────────────────────────────────────────
+    checkpoint = torch.load(CKPT_P2, map_location=device, weights_only=True)
+    model_best.load_state_dict(checkpoint["model_state_dict"])
     model_best.eval()
-
-    train_loss, train_acc, train_f1 = evaluate(train_dl, model_best, loss_fn, device)
-    val_loss,   val_acc,   val_f1   = evaluate(val_dl,   model_best, loss_fn, device)
-    test_loss,  test_acc,  test_f1  = evaluate(test_dl,  model_best, loss_fn, device)
 
     print("\n" + "=" * 50)
     print("Final Evaluation — EfficientNet-B0 (Phase 2)")
     print("=" * 50)
-    print(f"  Train → loss={train_loss:.4f}  acc={100*train_acc:.1f}%  f1={100*train_f1:.1f}%")
-    print(f"  Val   → loss={val_loss:.4f}  acc={100*val_acc:.1f}%  f1={100*val_f1:.1f}%")
-    print(f"  Test  → loss={test_loss:.4f}  acc={100*test_acc:.1f}%  f1={100*test_f1:.1f}%")
+    full_eval(train_dl, "Train")
+    full_eval(val_dl,   "Val  ")
+    full_eval(test_dl,  "Test ")
     print("=" * 50)
