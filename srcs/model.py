@@ -1,7 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import (
+    resnet50,
+    ResNet50_Weights,
+    efficientnet_b0,
+    EfficientNet_B0_Weights,
+)
 
 class Residual(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, use_1x1conv=False, strides=1):
@@ -80,6 +85,24 @@ def ResNet50(num_classes=4, freeze_backbone=True):
     model.fc = nn.Sequential(
         nn.Dropout(0.5),
         nn.Linear(num_ftrs, num_classes)
+    )
+
+    return model, weights
+
+
+def EfficientNetB0(num_classes=4, freeze_backbone=True):
+
+    weights = EfficientNet_B0_Weights.DEFAULT
+    model = efficientnet_b0(weights=weights)
+
+    if freeze_backbone:
+        for param in model.parameters():
+            param.requires_grad = False
+
+    in_features = model.classifier[1].in_features
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=0.5),
+        nn.Linear(in_features, num_classes)
     )
 
     return model, weights

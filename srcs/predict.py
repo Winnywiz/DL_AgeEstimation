@@ -1,19 +1,19 @@
 import os
 import cv2
 import torch
-import torch.nn as nn
 import mediapipe as mp
-import numpy as np
 from PIL import Image
-from torchvision import models, transforms
+from torchvision import transforms
+from model import ResNet50, EfficientNetB0
 
 CLASS_NAMES = ['18-24', '25-39', '40-59', '60-plus']
+MODEL_ARCH = "efficientnet_b0"
 
 # Initialize MediaPipe
 mp_face_detection = mp.solutions.face_detection
 face_detector = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
 
-# Setup Preprocessing (standard for ResNet)
+# Setup preprocessing (ImageNet normalization for both backbones)
 preprocess = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -87,12 +87,13 @@ if __name__ == "__main__":
     pad = 0.1
     my_img = r'00598_AKARA.jpg'
     
-    age_model = models.resnet50()
-    num_ftrs = age_model.fc.in_features
-    age_model.fc = nn.Sequential(
-        nn.Dropout(0.5),
-        nn.Linear(num_ftrs, len(CLASS_NAMES))
-    )
+    if MODEL_ARCH == "efficientnet_b0":
+        age_model, _ = EfficientNetB0(num_classes=len(CLASS_NAMES), freeze_backbone=False)
+    elif MODEL_ARCH == "resnet50":
+        age_model, _ = ResNet50(num_classes=len(CLASS_NAMES), freeze_backbone=False)
+    else:
+        raise ValueError(f"Unsupported MODEL_ARCH: {MODEL_ARCH}")
+
     age_model.load_state_dict(torch.load(model_weight_path, map_location=device, weights_only=True))
     age_model.to(device).eval()
 
