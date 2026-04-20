@@ -4,100 +4,127 @@ import torch
 import mediapipe as mp
 from PIL import Image
 from torchvision import transforms
-from model import ResNet50, EfficientNetB0
 
-CLASS_NAMES = ['18-24', '25-39', '40-59', '60-plus']
-MODEL_ARCH = "efficientnet_b0"
+from model import ResNet50_base, ResNet50, EfficientNetB0
 
-# Initialize MediaPipe
-mp_face_detection = mp.solutions.face_detection
-face_detector = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
+CLASS_NAMES = ["18-24", "25-39", "40-59", "60-plus"]
+PADDING     = 0.1
 
-# Setup preprocessing (ImageNet normalization for both backbones)
+ARCH_CKPT_DEFAULTS = {
+    "resnet50_base"   : "./checkpoints/resnet50_base.pth",
+    "resnet50"        : "./checkpoints/resnet50_finetuned.pth",
+    "efficientnet_b0" : "./checkpoints/efficientnet_b0_finetuned.pth",
+}
+
 preprocess = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-def annotate_multiple_faces(image_path, model, device, padding):
+mp_face_detection = mp.solutions.face_detection
+face_detector     = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
+
+
+def predict_image(image_path: str, model, device, padding: float = PADDING):
+    """
+    Detect all faces in an image, predict age group for each,
+    and save annotated result.
+    """
     img_cv = cv2.imread(image_path)
     if img_cv is None:
-        print(f"Error: Could not read {image_path}")
+        print(f"Error: could not read '{image_path}'")
         return
 
-    h, w, _ = img_cv.shape
+    h, w    = img_cv.shape[:2]
     img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
     results = face_detector.process(img_rgb)
 
     if not results.detections:
-        print("No faces found.")
+        print("No faces detected.")
         return
 
-    print(f"Detected {len(results.detections)} faces. Processing...")
+    print(f"Detected {len(results.detections)} face(s). Processing...")
 
     for detection in results.detections:
         bbox = detection.location_data.relative_bounding_box
-        
-        # Calculate raw coordinates
-        x, y, bw, bh = int(bbox.xmin * w), int(bbox.ymin * h), int(bbox.width * w), int(bbox.height * h)
-        
-        # Apply Padding
-        pad_w, pad_h = int(bw * padding), int(bh * padding)
-        x1, y1 = max(0, x - pad_w), max(0, y - pad_h)
-        x2, y2 = min(w, x + bw + pad_w), min(h, y + bh + pad_h)
 
-        # Crop and Predict
-        face_crop_rgb = img_rgb[y1:y2, x1:x2]
-        if face_crop_rgb.size == 0: continue
-        
-        pil_face = Image.fromarray(face_crop_rgb)
-        img_tensor = preprocess(pil_face).unsqueeze(0).to(device)
+        x  = int(bbox.xmin  * w)
+        y  = int(bbox.ymin  * h)
+        bw = int(bbox.width  * w)
+        bh = int(bbox.height * h)
+
+        pad_w = int(bw * padding)
+        pad_h = int(bh * padding)
+        x1 = max(0, x - pad_w)
+        y1 = max(0, y - pad_h)
+        x2 = min(w, x + bw + pad_w)
+        y2 = min(h, y + bh + pad_h)
+
+        face_crop = img_rgb[y1:y2, x1:x2]
+        if face_crop.size == 0:
+            continue
+
+        img_tensor = preprocess(Image.fromarray(face_crop)).unsqueeze(0).to(device)
 
         with torch.no_grad():
-            outputs = model(img_tensor)
-            probs = torch.nn.functional.softmax(outputs.squeeze(), dim=0)
+            output = model(img_tensor)
+            probs  = torch.softmax(output.squeeze(), dim=0)
             conf, idx = torch.max(probs, dim=0)
-            age_text = f"{CLASS_NAMES[idx.item()]} ({conf.item()*100:.1f}%)"
+            label  = f"{CLASS_NAMES[idx.item()]} ({conf.item()*100:.1f}%)"
 
-        # Draw the face bounding box
         cv2.rectangle(img_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        
-        # Get text dimensions (label_size is a tuple: (width, height))
-        (text_w, text_h), baseline = cv2.getTextSize(age_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
-        
-        # Calculate label background position
-        label_ymin = max(text_h, y1 - text_h - 10) 
-        
-        # Draw the solid green background
-        cv2.rectangle(img_cv, (x1, label_ymin - text_h - 5), (x1 + text_w, label_ymin + 5), (0, 255, 0), -1)
-        
-        # Draw the text
-        cv2.putText(img_cv, age_text, (x1, label_ymin), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
 
-    # Save the final result
-    output_name = "annotated_faces.jpg"
-    cv2.imwrite(output_name, img_cv)
-    print(f"Success! Result saved as: {output_name}")
+        (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+        label_y = max(text_h + 5, y1 - 5)
+        cv2.rectangle(img_cv, (x1, label_y - text_h - 5), (x1 + text_w, label_y + 5), (0, 255, 0), -1)
+        cv2.putText(img_cv, label, (x1, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+
+    output_path = "annotated_output.jpg"
+    cv2.imwrite(output_path, img_cv)
+    print(f"Saved annotated result → '{output_path}'")
+
+
+def load_model(arch: str, weights_path: str, device):
+    if arch == "resnet50_base":
+        model = ResNet50_base(num_classes=len(CLASS_NAMES))
+    elif arch == "resnet50":
+        model, _ = ResNet50(num_classes=len(CLASS_NAMES), freeze_backbone=False)
+    elif arch == "efficientnet_b0":
+        model, _ = EfficientNetB0(num_classes=len(CLASS_NAMES), freeze_backbone=False)
+    else:
+        raise ValueError(f"Unknown arch: {arch}")
+    model.load_state_dict(torch.load(weights_path, map_location=device, weights_only=True))
+    return model.to(device).eval()
+
 
 if __name__ == "__main__":
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_weight_path = "model_best_finetuned.pth"
+    import argparse
 
-    pad = 0.1
-    my_img = r'00598_AKARA.jpg'
-    
-    if MODEL_ARCH == "efficientnet_b0":
-        age_model, _ = EfficientNetB0(num_classes=len(CLASS_NAMES), freeze_backbone=False)
-    elif MODEL_ARCH == "resnet50":
-        age_model, _ = ResNet50(num_classes=len(CLASS_NAMES), freeze_backbone=False)
+    parser = argparse.ArgumentParser(description="Age group prediction from image")
+    parser.add_argument("image",    type=str,  help="Path to input image")
+    parser.add_argument("--arch",   type=str,  default="efficientnet_b0",
+                        choices=list(ARCH_CKPT_DEFAULTS.keys()),
+                        help="Model architecture (default: efficientnet_b0)")
+    parser.add_argument("--weights", type=str,  default=None,
+                        help="Path to model weights (defaults to arch-specific checkpoint)")
+    parser.add_argument("--padding", type=float, default=PADDING,
+                        help="Face crop padding ratio")
+    args = parser.parse_args()
+
+    weights_path = args.weights or ARCH_CKPT_DEFAULTS[args.arch]
+
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else
+        "mps"  if torch.backends.mps.is_available() else
+        "cpu"
+    )
+    print(f"Device: {device}")
+
+    model = load_model(args.arch, weights_path, device)
+    print(f"Loaded {args.arch} weights from '{weights_path}'")
+
+    if not os.path.exists(args.image):
+        print(f"Error: image not found at '{args.image}'")
     else:
-        raise ValueError(f"Unsupported MODEL_ARCH: {MODEL_ARCH}")
-
-    age_model.load_state_dict(torch.load(model_weight_path, map_location=device, weights_only=True))
-    age_model.to(device).eval()
-
-    if os.path.exists(my_img):
-        annotate_multiple_faces(my_img, age_model, device,pad)
-    else:
-        print(f"File not found: {my_img}")
+        predict_image(args.image, model, device, padding=args.padding)

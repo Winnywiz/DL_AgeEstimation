@@ -1,9 +1,11 @@
 pandas
 numpy
-torch
+gdown
+Pillow
 torchvision
-opencv-python
 torcheval
 tensorboard
 kagglehub
+streamlit
+opencv-python-headless
 mediapipe==0.10.14
