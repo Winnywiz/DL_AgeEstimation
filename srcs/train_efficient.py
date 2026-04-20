@@ -1,14 +1,14 @@
 import os
 from datetime import datetime
+
 import torch
 import torch.nn as nn
-from torchvision import datasets
 import torchvision.transforms.v2 as T
+from model import EfficientNetB0
 from torch.utils.data import DataLoader, Subset, random_split
 from torch.utils.tensorboard import SummaryWriter
-
-from model import EfficientNetB0
-from utils import train_one_epoch, evaluate, plot_predictions
+from torchvision import datasets
+from utils import evaluate, plot_predictions, train_one_epoch
 
 # ─────────────────────────────────────────────────
 # Config
@@ -20,10 +20,13 @@ LOG_DIR       = "./runs/efficientnet_b0_transfer"
 BATCH_SIZE    = 64
 LEARNING_RATE = 5e-4
 EPOCHS_P1     = 15
-EPOCHS_P2     = 60
+EPOCHS_P2     = 30
 PATIENCE      = 15
 NUM_CLASSES   = 4
 SEED          = 42
+P2_BACKBONE_LR = 1e-5
+P2_HEAD_LR     = 1e-4
+P2_WEIGHT_DECAY = 1e-2
 
 if __name__ == "__main__":
     os.makedirs("./checkpoints", exist_ok=True)
@@ -39,7 +42,7 @@ if __name__ == "__main__":
         T.Resize((224, 224)),
         T.RandomHorizontalFlip(p=0.5),
         T.RandomRotation(degrees=5),
-        T.ColorJitter(brightness=0.1, contrast=0.1),
+        T.ColorJitter(brightness=0.1, contrast=0.1), 
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
         T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -47,7 +50,6 @@ if __name__ == "__main__":
 
     test_trans = T.Compose([
         T.Resize((224, 224)),
-        T.CenterCrop(224),
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
         T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -156,19 +158,21 @@ if __name__ == "__main__":
         param.requires_grad = True
 
     optimizer_ft = torch.optim.AdamW([
-        {"params": model_best.features.parameters(),    "lr": 1e-6},
-        {"params": model_best.classifier.parameters(),  "lr": 1e-4},
-    ], weight_decay=0.05)
+        {"params": model_best.features.parameters(),   "lr": P2_BACKBONE_LR},
+        {"params": model_best.classifier.parameters(), "lr": P2_HEAD_LR},
+    ], weight_decay=P2_WEIGHT_DECAY)
 
-    scheduler     = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_ft, T_max=EPOCHS_P2)
     best_vloss_ft = float("inf")
     counter       = 0
 
     for epoch in range(EPOCHS_P2):
-        lr_head = optimizer_ft.param_groups[-1]["lr"]
-        print(f"Fine-Tune Epoch {epoch+1} / {EPOCHS_P2}  (lr_head={lr_head:.2e})")
+        lr_backbone = optimizer_ft.param_groups[0]["lr"]
+        lr_head = optimizer_ft.param_groups[1]["lr"]
+        print(
+            f"Fine-Tune Epoch {epoch+1} / {EPOCHS_P2} "
+            f"(lr_backbone={lr_backbone:.2e}, lr_head={lr_head:.2e})"
+        )
         train_one_epoch(train_dl, model_best, loss_fn, optimizer_ft, epoch, device, writer)
-        scheduler.step()
 
         val_loss, val_acc, val_f1 = evaluate(val_dl, model_best, loss_fn, device)
         writer.add_scalar("Loss/val_ft", val_loss, epoch)

@@ -1,0 +1,6 @@
+srcs/UTKFace_organized/*
+
+srcs/runs/*
+srcs/__pycache__/*
+srcs/efficient_sanity_check.jpg
+srcs/checkpoints/efficientnet_b0_vloss.pth
