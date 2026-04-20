@@ -13,11 +13,12 @@ from torcheval.metrics.functional import (
     multiclass_f1_score
 )
 from utils import train_one_epoch, test, plot_predictions
-from model import ResNet50
+from model import ResNet50, EfficientNetB0
 
 learning_rate = 5e-4
 batch_size = 64
 epochs = 15
+model_arch = "efficientnet_b0"
 
 train_trans = transforms_v2.Compose([
     transforms_v2.Resize((224, 224)),
@@ -77,7 +78,12 @@ if __name__ == '__main__':
     # Import weight from resnet50 pretrained on ImageNet
 
     # Create a model
-    model, weights = ResNet50(num_classes=4, freeze_backbone=True)
+    if model_arch == "efficientnet_b0":
+        model, weights = EfficientNetB0(num_classes=4, freeze_backbone=True)
+    elif model_arch == "resnet50":
+        model, weights = ResNet50(num_classes=4, freeze_backbone=True)
+    else:
+        raise ValueError(f"Unsupported model_arch: {model_arch}")
     model = model.to(device)
 
     print(f"Model successfully loaded and sent to: {device}")
@@ -151,7 +157,12 @@ if __name__ == '__main__':
     ###########################
  
 
-    model_best, _ = ResNet50(num_classes=len(test_ds.dataset.classes), freeze_backbone=False)
+    if model_arch == "efficientnet_b0":
+        model_best, _ = EfficientNetB0(num_classes=len(test_ds.dataset.classes), freeze_backbone=False)
+    elif model_arch == "resnet50":
+        model_best, _ = ResNet50(num_classes=len(test_ds.dataset.classes), freeze_backbone=False)
+    else:
+        raise ValueError(f"Unsupported model_arch: {model_arch}")
     model_best = model_best.to(device)
     checkpoint = torch.load('model_best_vloss.pth', map_location=device, weights_only=True)
     model_best.load_state_dict(checkpoint)
@@ -192,14 +203,20 @@ if __name__ == '__main__':
     for param in model_best.parameters():
         param.requires_grad = True
 
-    optimizer_ft = torch.optim.AdamW([
-        {'params': model_best.conv1.parameters(), 'lr': 1e-7},
-        {'params': model_best.layer1.parameters(), 'lr': 1e-7},
-        {'params': model_best.layer2.parameters(), 'lr': 1e-6},
-        {'params': model_best.layer3.parameters(), 'lr': 1e-6},
-        {'params': model_best.layer4.parameters(), 'lr': 1e-5},
-        {'params': model_best.fc.parameters(), 'lr': 1e-4}
-    ], weight_decay=0.05)
+    if model_arch == "resnet50":
+        optimizer_ft = torch.optim.AdamW([
+            {'params': model_best.conv1.parameters(), 'lr': 1e-7},
+            {'params': model_best.layer1.parameters(), 'lr': 1e-7},
+            {'params': model_best.layer2.parameters(), 'lr': 1e-6},
+            {'params': model_best.layer3.parameters(), 'lr': 1e-6},
+            {'params': model_best.layer4.parameters(), 'lr': 1e-5},
+            {'params': model_best.fc.parameters(), 'lr': 1e-4}
+        ], weight_decay=0.05)
+    else:
+        optimizer_ft = torch.optim.AdamW([
+            {'params': model_best.features.parameters(), 'lr': 1e-6},
+            {'params': model_best.classifier.parameters(), 'lr': 1e-4}
+        ], weight_decay=0.05)
 
     epochs_ft = 60
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_ft, T_max=epochs_ft)
