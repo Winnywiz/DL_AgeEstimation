@@ -11,9 +11,6 @@ from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_scor
 from model import EfficientNetB0
 from utils import train_one_epoch, test, plot_predictions
 
-# ─────────────────────────────────────────────────
-# Config
-# ─────────────────────────────────────────────────
 DATA_DIR      = "./UTKFace_organized"
 CKPT_P1       = "./checkpoints/efficientnet_b0_vloss.pth"
 CKPT_P2       = "./checkpoints/efficientnet_b0_finetuned.pth"
@@ -84,7 +81,6 @@ if __name__ == "__main__":
     val_ds   = Subset(base_test_ds,  val_idx)
     test_ds  = Subset(base_test_ds,  test_idx)
 
-    # num_workers=0 for Mac; set to 4 on Linux/Colab
     train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0, pin_memory=False)
     val_dl   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=False)
     test_dl  = DataLoader(test_ds,  batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=False)
@@ -225,9 +221,6 @@ if __name__ == "__main__":
     writer.close()
     print("\nPhase 2 Done!")
 
-    # ─────────────────────────────────────────────────
-    # Final Evaluation
-    # ─────────────────────────────────────────────────
     checkpoint = torch.load(CKPT_P2, map_location=device, weights_only=True)
     model_best.load_state_dict(checkpoint["model_state_dict"])
     model_best.eval()
