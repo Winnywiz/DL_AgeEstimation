@@ -16,7 +16,7 @@ PADDING         = 0.15
 CHECKPOINT_URLS = {
     "resnet50_baseline_best.pth" : "1MQUkz9Yd2WcyNJN7mYndpIWg8fN3xky_",
     "resnet50_finetuned.pth"     : "1WZg_qlu6BzcqhS-71HQeuW5DreQNxh75",
-    "efficientnet_finetuned.pth" : "1BCrJthxmbgtgbmtIX1sndxwGR9i1KRcP",
+    "efficientnet_finetuned.pth" : "1VGWCbM6yNbm4za7exBqxmdVMHY-8V0BU",
 }
 
 DISPLAY_NAMES = {
