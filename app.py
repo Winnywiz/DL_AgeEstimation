@@ -15,15 +15,15 @@ CHECKPOINTS_DIR = "./checkpoints"
 PADDING         = 0.15
 
 CHECKPOINT_URLS = {
-    "resnet50_baseline_best.pth" : "1MQUkz9Yd2WcyNJN7mYndpIWg8fN3xky_",
-    "resnet50_finetuned.pth"     : "1WZg_qlu6BzcqhS-71HQeuW5DreQNxh75",
-    "efficientnet.pth"           : "1VGWCbM6yNbm4za7exBqxmdVMHY-8V0BU",
+    "resnet50_base.pth"           : "1MQUkz9Yd2WcyNJN7mYndpIWg8fN3xky_",
+    "resnet50_finetuned.pth"      : "1WZg_qlu6BzcqhS-71HQeuW5DreQNxh75",
+    "efficientnet_b0_finetuned.pth" : "1VGWCbM6yNbm4za7exBqxmdVMHY-8V0BU",
 }
 
 DISPLAY_NAMES = {
-    "resnet50_baseline_best.pth" : "ResNet-50 — Baseline",
-    "resnet50_finetuned.pth"     : "ResNet-50 — Fine-Tuned",
-    "efficientnet.pth"           : "EfficientNet-B0 - Fine-Tuned",
+    "resnet50_base.pth"           : "ResNet-50 — Baseline",
+    "resnet50_finetuned.pth"      : "ResNet-50 — Fine-Tuned",
+    "efficientnet_b0_finetuned.pth" : "EfficientNet-B0 - Fine-Tuned",
 }
 
 def inject_css():
@@ -106,7 +106,11 @@ def build_model(checkpoint_name: str):
     if "efficientnet" in name:
         from torchvision.models import efficientnet_b0
         model = efficientnet_b0(weights=None)
-        model.classifier[1] = nn.Linear(model.classifier[1].in_features, len(CLASS_NAMES))
+        in_features = model.classifier[1].in_features
+        model.classifier = nn.Sequential(
+            nn.Dropout(p=0.5),
+            nn.Linear(in_features, len(CLASS_NAMES))
+        )
     elif "base" in name:
         model = resnet50(weights=None)
         model.fc = nn.Linear(model.fc.in_features, len(CLASS_NAMES))

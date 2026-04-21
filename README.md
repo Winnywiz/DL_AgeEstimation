@@ -4,7 +4,7 @@ Streamlit web app for age group prediction using ResNet-50 / EfficientNet-B0 + M
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.12+
 - Docker + Docker Compose (for containerized deployment)
 - CUDA-compatible GPU recommended for training
 

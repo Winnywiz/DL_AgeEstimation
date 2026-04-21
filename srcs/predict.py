@@ -8,7 +8,7 @@ from torchvision import transforms
 from model import ResNet50_base, ResNet50, EfficientNetB0
 
 CLASS_NAMES = ["18-24", "25-39", "40-59", "60-plus"]
-PADDING     = 0.1
+PADDING     = 0.15
 
 ARCH_CKPT_DEFAULTS = {
     "resnet50_base"   : "./checkpoints/resnet50_base.pth",
