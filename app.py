@@ -23,7 +23,7 @@ CHECKPOINT_URLS = {
 DISPLAY_NAMES = {
     "resnet50_baseline_best.pth" : "ResNet-50 — Baseline",
     "resnet50_finetuned.pth"     : "ResNet-50 — Fine-Tuned",
-    "efficientnet.pth"           : "EfficientNet-B0",
+    "efficientnet.pth"           : "1VGWCbM6yNbm4za7exBqxmdVMHY-8V0BU",
 }
 
 def inject_css():

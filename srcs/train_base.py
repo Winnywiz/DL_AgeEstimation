@@ -10,9 +10,6 @@ from torch.utils.tensorboard import SummaryWriter
 from model import ResNet50_base
 from utils import train_one_epoch, evaluate, plot_predictions
 
-# ─────────────────────────────────────────────────
-# Config
-# ─────────────────────────────────────────────────
 DATA_DIR      = "./UTKFace_organized"
 CKPT_PATH     = "./checkpoints/resnet50_base.pth"
 LOG_DIR       = "./runs/resnet50_baseline"

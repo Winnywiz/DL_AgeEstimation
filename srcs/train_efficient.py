@@ -10,9 +10,6 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets
 from utils import evaluate, plot_predictions, train_one_epoch
 
-# ─────────────────────────────────────────────────
-# Config
-# ─────────────────────────────────────────────────
 DATA_DIR      = "./UTKFace_organized"
 CKPT_P1       = "./checkpoints/efficientnet_b0_vloss.pth"
 CKPT_P2       = "./checkpoints/efficientnet_b0_finetuned.pth"
@@ -74,8 +71,6 @@ if __name__ == "__main__":
     train_ds = Subset(base_train_ds, train_idx)
     val_ds   = Subset(base_test_ds,  val_idx)
     test_ds  = Subset(base_test_ds,  test_idx)
-
-    # num_workers=0 for Mac; set to 4 on Linux/Colab
     train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0, pin_memory=False)
     val_dl   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=False)
     test_dl  = DataLoader(test_ds,  batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=False)
