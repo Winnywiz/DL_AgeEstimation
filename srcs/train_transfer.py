@@ -10,6 +10,9 @@ from torch.utils.tensorboard import SummaryWriter
 from model import ResNet50
 from utils import train_one_epoch, evaluate, plot_predictions
 
+# ─────────────────────────────────────────────────
+# Config
+# ─────────────────────────────────────────────────
 DATA_DIR      = "./UTKFace_organized"
 CKPT_P1       = "./checkpoints/resnet50_vloss.pth"
 CKPT_P2       = "./checkpoints/resnet50_finetuned.pth"
@@ -70,6 +73,7 @@ if __name__ == "__main__":
     val_ds   = Subset(base_test_ds,  val_idx)
     test_ds  = Subset(base_test_ds,  test_idx)
 
+    # num_workers=0 for Mac; set to 4 on Linux/Colab
     train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0, pin_memory=False)
     val_dl   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=False)
     test_dl  = DataLoader(test_ds,  batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=False)

@@ -23,6 +23,11 @@ class Residual(nn.Module):
 
 
 class ResNet(nn.Module):
+    """
+    ResNet built from scratch — used as a historical baseline to show
+    why transfer learning from pretrained weights outperforms training
+    from random initialization on limited data.
+    """
     def __init__(self, arch: tuple, in_channels, out_channels, num_classes, kernel_size=3, strides=2):
         super().__init__()
         self.arch    = arch
@@ -54,6 +59,10 @@ class ResNet(nn.Module):
         return self.linear(self.flatten(self.gap(out)))
 
 def ResNet50_base(num_classes=4):
+    """
+    Pretrained ResNet-50 with frozen backbone and a single linear head.
+    Used as the baseline model — no regularization techniques applied.
+    """
     weights = ResNet50_Weights.DEFAULT
     model   = resnet50(weights=weights)
 
@@ -64,6 +73,11 @@ def ResNet50_base(num_classes=4):
     return model
 
 def ResNet50(num_classes=4, freeze_backbone=True):
+    """
+    Pretrained ResNet-50 with dropout + linear classification head.
+    freeze_backbone=True  → Phase 1: head-only training
+    freeze_backbone=False → Phase 2: full fine-tuning
+    """
     weights = ResNet50_Weights.DEFAULT
     model   = resnet50(weights=weights)
 
@@ -79,6 +93,11 @@ def ResNet50(num_classes=4, freeze_backbone=True):
 
 
 def EfficientNetB0(num_classes=4, freeze_backbone=True):
+    """
+    Pretrained EfficientNet-B0 with dropout + linear classification head.
+    freeze_backbone=True  → Phase 1: head-only training
+    freeze_backbone=False → Phase 2: full fine-tuning
+    """
     weights = EfficientNet_B0_Weights.DEFAULT
     model   = efficientnet_b0(weights=weights)
 
