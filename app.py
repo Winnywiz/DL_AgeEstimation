@@ -17,13 +17,13 @@ PADDING         = 0.15
 CHECKPOINT_URLS = {
     "resnet50_baseline_best.pth" : "1MQUkz9Yd2WcyNJN7mYndpIWg8fN3xky_",
     "resnet50_finetuned.pth"     : "1WZg_qlu6BzcqhS-71HQeuW5DreQNxh75",
-    "efficientnet.pth"           : "YOUR_DRIVE_FILE_ID",
+    "efficientnet.pth"           : "1VGWCbM6yNbm4za7exBqxmdVMHY-8V0BU",
 }
 
 DISPLAY_NAMES = {
     "resnet50_baseline_best.pth" : "ResNet-50 — Baseline",
     "resnet50_finetuned.pth"     : "ResNet-50 — Fine-Tuned",
-    "efficientnet.pth"           : "1VGWCbM6yNbm4za7exBqxmdVMHY-8V0BU",
+    "efficientnet.pth"           : "EfficientNet-B0 - Fine-Tuned",
 }
 
 def inject_css():
@@ -124,7 +124,10 @@ def load_model(checkpoint_name: str):
     device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model     = build_model(checkpoint_name)
     ckpt_path = os.path.join(CHECKPOINTS_DIR, checkpoint_name)
-    model.load_state_dict(torch.load(ckpt_path, map_location=device, weights_only=True))
+    ckpt      = torch.load(ckpt_path, map_location=device, weights_only=True)
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        ckpt = ckpt["model_state_dict"]
+    model.load_state_dict(ckpt)
     model.to(device).eval()
     return model, device
 
