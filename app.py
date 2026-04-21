@@ -13,17 +13,16 @@ import gdown
 CLASS_NAMES     = ["18-24", "25-39", "40-59", "60-plus"]
 CHECKPOINTS_DIR = "./checkpoints"
 PADDING         = 0.15
-
 CHECKPOINT_URLS = {
     "resnet50_baseline_best.pth" : "1MQUkz9Yd2WcyNJN7mYndpIWg8fN3xky_",
     "resnet50_finetuned.pth"     : "1WZg_qlu6BzcqhS-71HQeuW5DreQNxh75",
-    "efficientnet.pth"           : "YOUR_DRIVE_FILE_ID",
+    "efficientnet_finetuned.pth" : "1VGWCbM6yNbm4za7exBqxmdVMHY-8V0BU",
 }
 
 DISPLAY_NAMES = {
     "resnet50_baseline_best.pth" : "ResNet-50 — Baseline",
     "resnet50_finetuned.pth"     : "ResNet-50 — Fine-Tuned",
-    "efficientnet.pth"           : "EfficientNet-B0",
+    "efficientnet_finetuned.pth" : "EfficientNet-B0",
 }
 
 def inject_css():
